@@ -192,7 +192,6 @@ def resolve_filepath(base_path, file_path):
     file_path = parsed_url.netloc + parsed_url.path
     while not dirname == '/':
         resolved_filepath = os.path.join(dirname, file_path)
-        print(resolved_filepath)
         if os.path.exists(resolved_filepath):
             return resolved_filepath
         dirname = os.path.dirname(dirname)
