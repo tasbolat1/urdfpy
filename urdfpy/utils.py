@@ -1,6 +1,12 @@
 """Utilities for URDF parsing.
 """
 import os
+try:
+    # for python3
+    from urllib.parse import urlparse
+except ImportError:
+    # for python2
+    from urlparse import urlparse
 
 from lxml import etree as ET
 import numpy as np
@@ -28,7 +34,7 @@ def rpy_to_matrix(coords):
     R : (3,3) float
         The corresponding homogenous 3x3 rotation matrix.
     """
-    coords = np.asanyarray(coords, dtype=np.float64)
+    coords = np.asanyarray(coords)
     c3, c2, c1 = np.cos(coords)
     s3, s2, s1 = np.sin(coords)
 
@@ -36,7 +42,7 @@ def rpy_to_matrix(coords):
         [c1 * c2, (c1 * s2 * s3) - (c3 * s1), (s1 * s3) + (c1 * c3 * s2)],
         [c2 * s1, (c1 * c3) + (s1 * s2 * s3), (c3 * s1 * s2) - (c1 * s3)],
         [-s2, c2 * s3, c2 * c3]
-    ], dtype=np.float64)
+    ])
 
 
 def matrix_to_rpy(R, solution=1):
@@ -66,7 +72,7 @@ def matrix_to_rpy(R, solution=1):
     coords : (3,) float
         The roll-pitch-yaw coordinates in order (x-rot, y-rot, z-rot).
     """
-    R = np.asanyarray(R, dtype=np.float64)
+    R = np.asanyarray(R)
     r = 0.0
     p = 0.0
     y = 0.0
@@ -87,7 +93,7 @@ def matrix_to_rpy(R, solution=1):
         r = np.arctan2(R[2,1] / np.cos(p), R[2,2] / np.cos(p))
         y = np.arctan2(R[1,0] / np.cos(p), R[0,0] / np.cos(p))
 
-    return np.array([r, p, y], dtype=np.float64)
+    return np.array([r, p, y])
 
 
 def matrix_to_xyz_rpy(matrix):
@@ -121,7 +127,7 @@ def xyz_rpy_to_matrix(xyz_rpy):
     matrix : (4,4) float
         The homogenous transform matrix.
     """
-    matrix = np.eye(4, dtype=np.float64)
+    matrix = np.eye(4)
     matrix[:3,3] = xyz_rpy[:3]
     matrix[:3,:3] = rpy_to_matrix(xyz_rpy[3:])
     return matrix
@@ -144,7 +150,7 @@ def parse_origin(node):
         ``origin`` child. Defaults to the identity matrix if no ``origin``
         child was found.
     """
-    matrix = np.eye(4, dtype=np.float64)
+    matrix = np.eye(4)
     origin_node = node.find('origin')
     if origin_node is not None:
         if 'xyz' in origin_node.attrib:
@@ -180,6 +186,20 @@ def unparse_origin(matrix):
     return node
 
 
+def resolve_filepath(base_path, file_path):
+    parsed_url = urlparse(file_path)
+    dirname = base_path
+    file_path = parsed_url.netloc + parsed_url.path
+    while not dirname == '/':
+        resolved_filepath = os.path.join(dirname, file_path)
+        print(resolved_filepath)
+        if os.path.exists(resolved_filepath):
+            return resolved_filepath
+        dirname = os.path.dirname(dirname)
+
+    return False
+
+
 def get_filename(base_path, file_path, makedirs=False):
     """Formats a file path correctly for URDF loading.
 
@@ -199,9 +219,13 @@ def get_filename(base_path, file_path, makedirs=False):
         The resolved filepath -- just the normal ``file_path`` if it was an
         absolute path, otherwise that path joined to ``base_path``.
     """
+    file_path = resolve_filepath(base_path, file_path)
     fn = file_path
-    if not os.path.isabs(file_path):
-        fn = os.path.join(base_path, file_path)
+    if os.path.exists(file_path):
+        fn = file_path
+    else:
+        if not os.path.isabs(file_path):
+            fn = os.path.join(base_path, file_path)
     if makedirs:
         d, _ = os.path.split(fn)
         if not os.path.exists(d):
@@ -259,9 +283,9 @@ def configure_origin(value):
         The created matrix.
     """
     if value is None:
-        value = np.eye(4, dtype=np.float64)
+        value = np.eye(4)
     elif isinstance(value, (list, tuple, np.ndarray)):
-        value = np.asanyarray(value, dtype=np.float64)
+        value = np.asanyarray(value).astype(float)
         if value.shape == (6,):
             value = xyz_rpy_to_matrix(value)
         elif value.shape != (4,4):
